@@ -21,6 +21,7 @@ import os
 import json
 import subprocess
 import tempfile
+import re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, unquote
 from pathlib import Path
@@ -93,6 +94,24 @@ DOCUMENTS:
 {context}"""
 
 
+def extract_text_from_pdf_bytes(pdf_bytes):
+    """Extract text from PDF bytes using pdftotext."""
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(pdf_bytes)
+            tmp_path = tmp.name
+        result = subprocess.run(
+            ["pdftotext", tmp_path, "-"],
+            capture_output=True, text=True
+        )
+        os.unlink(tmp_path)
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout
+    except FileNotFoundError:
+        print("  WARNING: pdftotext not found. Install poppler: brew install poppler")
+    return None
+
+
 def extract_text(filename, content):
     """Extract plain text from common file formats."""
     suffix = Path(filename).suffix.lower()
@@ -101,22 +120,55 @@ def extract_text(filename, content):
         return content.decode("utf-8", errors="replace")
 
     if suffix == ".pdf":
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-                tmp.write(content)
-                tmp_path = tmp.name
-            result = subprocess.run(
-                ["pdftotext", tmp_path, "-"],
-                capture_output=True, text=True
-            )
-            os.unlink(tmp_path)
-            if result.returncode == 0 and result.stdout.strip():
-                return result.stdout
-        except FileNotFoundError:
-            pass
+        text = extract_text_from_pdf_bytes(content)
+        if text:
+            return text
+        # Fallback: raw decode (won't be very useful but better than nothing)
         return content.decode("latin-1", errors="replace")
 
     return content.decode("utf-8", errors="replace")
+
+
+def parse_multipart(body, boundary):
+    """
+    Properly parse a multipart/form-data body.
+    Returns a list of (filename, file_bytes) tuples.
+    """
+    results = []
+    # Split on boundary
+    parts = body.split(b"--" + boundary)
+
+    for part in parts:
+        # Skip preamble and epilogue
+        if not part or part in (b"--\r\n", b"--", b"\r\n"):
+            continue
+        if part.startswith(b"--"):
+            continue
+
+        # Split headers from body at the double CRLF
+        header_end = part.find(b"\r\n\r\n")
+        if header_end == -1:
+            continue
+
+        header_section = part[:header_end].decode("utf-8", errors="replace")
+        file_data = part[header_end + 4:]  # skip the \r\n\r\n
+
+        # Remove trailing \r\n that comes before the next boundary
+        if file_data.endswith(b"\r\n"):
+            file_data = file_data[:-2]
+
+        # Extract filename from Content-Disposition header
+        filename = None
+        for line in header_section.split("\r\n"):
+            if "filename=" in line:
+                match = re.search(r'filename="([^"]*)"', line)
+                if match:
+                    filename = match.group(1)
+
+        if filename and file_data:
+            results.append((filename, file_data))
+
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -230,36 +282,47 @@ class Handler(BaseHTTPRequestHandler):
         content_type = self.headers.get("Content-Type", "")
 
         if "multipart/form-data" in content_type:
-            boundary = content_type.split("boundary=")[-1].encode()
+            # Extract boundary
+            boundary = None
+            for part in content_type.split(";"):
+                part = part.strip()
+                if part.startswith("boundary="):
+                    boundary = part[9:].strip().encode()
+                    break
+
+            if not boundary:
+                self._send_json({"error": "No boundary in content type"}, 400)
+                return
+
             body = self._read_body()
-            parts = body.split(b"--" + boundary)
+            files = parse_multipart(body, boundary)
 
-            for part in parts:
-                if b"filename=" in part:
-                    header_section, _, file_data = part.partition(b"\r\n\r\n")
-                    header_str = header_section.decode("utf-8", errors="replace")
-                    filename = "uploaded_file.txt"
-                    for segment in header_str.split(";"):
-                        if "filename=" in segment:
-                            filename = segment.split("=")[-1].strip().strip('"')
+            if not files:
+                self._send_json({"error": "No file found in upload"}, 400)
+                return
 
-                    file_data = file_data.rstrip(b"\r\n--")
+            filename, file_data = files[0]
 
-                    # Store raw bytes for PDFs
-                    if Path(filename).suffix.lower() == ".pdf":
-                        documents_raw[filename] = file_data
+            # Store raw bytes for PDFs so we can serve the original later
+            if Path(filename).suffix.lower() == ".pdf":
+                documents_raw[filename] = file_data
 
-                    text = extract_text(filename, file_data)
-                    documents[filename] = text
+            # Extract readable text
+            text = extract_text(filename, file_data)
 
-                    self._send_json({
-                        "message": f"Uploaded '{filename}' successfully.",
-                        "documents_loaded": len(documents),
-                        "characters_extracted": len(text),
-                    })
-                    return
+            if len(text.strip()) < 10:
+                self._send_json({"error": "Could not extract meaningful text from this file. Make sure pdftotext is installed (brew install poppler)."}, 400)
+                return
 
-            self._send_json({"error": "No file found in upload"}, 400)
+            documents[filename] = text
+
+            print(f"  Uploaded: {filename} ({len(text)} chars extracted, PDF stored: {filename in documents_raw})")
+
+            self._send_json({
+                "message": f"Uploaded '{filename}' successfully.",
+                "documents_loaded": len(documents),
+                "characters_extracted": len(text),
+            })
 
         elif "application/json" in content_type:
             body = json.loads(self._read_body())
@@ -321,6 +384,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": str(e)}, 500)
 
     def log_message(self, format, *args):
+        # Print uploads and errors but suppress routine request logs
         pass
 
 
