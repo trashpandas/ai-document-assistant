@@ -1,171 +1,134 @@
-# Code of Conduct AI Assistant
+# AI Document Assistant
 
-A conversational AI agent that answers questions about Government of Alberta policy documents. Upload PDFs or text files, then ask questions in natural language — the assistant responds in a warm, professional tone with clickable references back to the original source documents.
-
-Built with Python and the [Anthropic Claude API](https://docs.anthropic.com).
-
-![Version](https://img.shields.io/badge/version-0.2-blue)
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-green)
-![License](https://img.shields.io/badge/license-GPLv3-blue)
+![License](https://img.shields.io/badge/license-GPLv3-orange)
+![PostgreSQL](https://img.shields.io/badge/postgresql-16%2B-blue)
 
-## Features
+A conversational AI assistant that ingests Government of Alberta policy documents (PDF, TXT, MD) and answers questions about them in a warm, professional tone — with smart search, clickable references, and an interactive knowledge graph.
 
-- **Conversational AI responses** — Claude answers in a professional but approachable tone, not raw markdown
-- **Clickable source references** — Inline links to specific document sections open the original PDF
-- **PDF viewer** — View source documents in-app (web modal or iOS WebKit sheet) without leaving the chat
-- **Document ingestion** — Upload PDF, TXT, MD, and CSV files through the web interface or API
-- **Original PDF preservation** — Stores both extracted text and the original PDF for reference
-- **Multi-turn conversation** — Ask follow-up questions with full conversation history
-- **Web chat interface** — Clean, responsive browser UI
-- **iOS app** — Native SwiftUI chat client with document picker and PDF viewer
-- **Simple API** — RESTful endpoints for uploading documents and chatting programmatically
+## What It Does
 
-## Quick Start
-
-### Prerequisites
-
-- Python 3.10 or later
-- An [Anthropic API key](https://console.anthropic.com)
-- `pdftotext` for PDF support: `brew install poppler` on macOS
-
-### Setup
-
-```bash
-git clone https://github.com/YOUR_USERNAME/ai-document-assistant.git
-cd ai-document-assistant/backend
-
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-export ANTHROPIC_API_KEY="sk-ant-..."
-
-python3 server.py
-```
-
-Open **http://localhost:8000** in your browser.
-
-### Usage
-
-1. Click the paperclip button to upload a document (PDF, TXT, MD, CSV)
-2. Type a question and press Enter
-3. The assistant responds conversationally with inline references
-4. Click any reference link to view the original document
-
-## API Reference
-
-### `GET /`
-Serves the web chat interface.
-
-### `GET /api`
-Returns server status and document count.
-
-### `GET /documents`
-Lists all uploaded documents with character counts and PDF availability.
-
-### `GET /pdf/{filename}`
-Serves the original PDF file for in-app viewing.
-
-### `POST /upload`
-Upload a document. Accepts multipart form data or JSON.
-
-```bash
-# File upload
-curl -X POST http://localhost:8000/upload -F "file=@document.pdf"
-
-# Text upload
-curl -X POST http://localhost:8000/upload \
-  -H "Content-Type: application/json" \
-  -d '{"filename": "doc.txt", "content": "Your text here..."}'
-```
-
-### `POST /chat`
-Ask a question. Returns a conversational reply with source references and PDF URLs.
-
-```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "What are the rules about accepting gifts?"}'
-```
-
-Response includes `reply`, `sources`, and `pdf_urls` for linking back to originals.
-
-### `DELETE /documents/{filename}`
-Remove a document from the knowledge base.
-
-## Project Structure
-
-```
-ai-document-assistant/
-├── backend/
-│   ├── server.py           # Python backend (Claude API + document store + PDF serving)
-│   ├── index.html          # Web chat interface with PDF viewer modal
-│   └── requirements.txt    # Python dependencies
-├── ios-app/
-│   ├── CodeofConductAIAssistantApp.swift   # App entry point
-│   ├── APIService.swift                     # Backend API client
-│   ├── ChatViewModel.swift                  # Chat state management
-│   └── ChatView.swift                       # SwiftUI chat + PDF viewer
-├── SETUP-GUIDE.md          # Step-by-step setup instructions
-├── CHANGELOG.md            # Version history
-├── LICENSE                 # GPLv3 License
-└── README.md
-```
+Upload a PDF and the system will analyze every page using Claude Vision to extract structured markdown, identify keywords and concepts, generate vector embeddings, and build a knowledge graph of relationships. When you ask a question, it uses hybrid search (vector similarity + full-text keyword) to find the most relevant sections, then sends only those sections to Claude for an accurate, grounded answer with page references.
 
 ## Architecture
 
 ```
-┌─────────────────┐         ┌──────────────────┐         ┌─────────┐
-│  Web Browser /  │ ──────> │  Python Backend  │ ──────> │  Claude  │
-│   iOS App       │ <────── │   (server.py)    │ <────── │   API    │
-└─────────────────┘  JSON   └──────────────────┘  HTTP   └─────────┘
-                        │           │
-                  PDF viewer    stores text +
-                   (modal/      original PDFs
-                    WebKit)         │
-                              ┌──────────┐
-                              │ In-Memory│
-                              │ Document │
-                              │  Store   │
-                              └──────────┘
+┌─────────────┐     ┌──────────────────────────┐     ┌───────────────┐
+│  iOS App    │────▶│  Python Backend (v1.0)    │────▶│  Claude API   │
+│  (SwiftUI)  │◀────│  http.server + modules    │◀────│  (Sonnet)     │
+└─────────────┘     └──────────┬───────────────┘     └───────────────┘
+                               │
+┌─────────────┐     ┌──────────▼───────────────┐     ┌───────────────┐
+│  Web UI     │────▶│  PostgreSQL + pgvector    │     │  Claude Vision│
+│  (D3.js)    │◀────│  (documents, chunks,      │     │  (PDF pages)  │
+└─────────────┘     │   embeddings, metadata)   │     └───────────────┘
+                    └──────────────────────────┘
 ```
 
-## Configuration
+## Features
 
-| Environment Variable | Required | Description |
-|---------------------|----------|-------------|
-| `ANTHROPIC_API_KEY` | Yes | Your Anthropic API key from [console.anthropic.com](https://console.anthropic.com) |
+**Document Processing**
+- PDF page-by-page analysis using Claude Vision
+- Structured markdown extraction preserving headings, lists, tables
+- Automatic text chunking with overlap for search continuity
+- Local vector embeddings (sentence-transformers, all-MiniLM-L6-v2)
 
-Server settings in `server.py`:
+**Smart Search**
+- Hybrid retrieval: vector similarity + PostgreSQL full-text search
+- Reciprocal Rank Fusion (RRF) for optimal result merging
+- Only the most relevant chunks are sent to Claude (not the whole document)
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `CLAUDE_MODEL` | `claude-sonnet-4-20250514` | The Claude model to use |
-| `PORT` | `8000` | Server port |
-| Document context limit | `16000` chars | Max characters sent per document |
+**Metadata & Knowledge Graph**
+- Automated extraction of keywords, concepts, contradictions, and concerns
+- Interactive D3.js force-directed graph visualization
+- Document-to-concept and document-to-document relationship mapping
 
-## Security
+**Chat Interface**
+- Warm, conversational tone (like a helpful colleague)
+- Clickable page references that open the original PDF
+- Copy and download buttons on every response
+- Real-time processing status during document upload
 
-The API key is read exclusively from the `ANTHROPIC_API_KEY` environment variable. It is never hardcoded, logged, or transmitted to the client. The `.gitignore` excludes `.env` files and virtual environments.
+**iOS App**
+- Native SwiftUI chat interface
+- Document upload via system file picker
+- In-app PDF viewer (WebKit)
+- Knowledge graph viewer
+- Share sheet for exporting responses
 
-When deploying, never commit your API key to version control.
+## Prerequisites
 
-## Limitations
+- macOS with Homebrew
+- Python 3.10+
+- PostgreSQL 16+ with pgvector extension
+- poppler (for PDF processing)
+- Anthropic API key
 
-- **In-memory storage** — Documents are lost when the server restarts
-- **No authentication** — Add auth before exposing to a network
-- **Context window** — Very large documents are trimmed to 16,000 characters
-- **Local network only** — iOS app requires same Wi-Fi as the backend server
+## Quick Start
 
-## Roadmap
+Install dependencies:
 
-- [ ] Persistent document storage (SQLite)
-- [ ] Vector search for smarter retrieval (ChromaDB)
-- [ ] Streaming responses
-- [ ] User authentication
-- [ ] Cloud deployment
-- [ ] TestFlight distribution
+```bash
+brew install postgresql@16 pgvector poppler
+brew services start postgresql@16
+createdb ai_assistant
+psql ai_assistant -c "CREATE EXTENSION IF NOT EXISTS vector;"
+```
+
+Set up Python:
+
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+Run:
+
+```bash
+export ANTHROPIC_API_KEY="your-key-here"
+python3 server.py
+```
+
+Open http://localhost:8000 in your browser.
+
+## API Reference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Web chat interface |
+| GET | `/api` | Server status |
+| GET | `/documents` | List loaded documents |
+| GET | `/documents/status` | Processing status for uploads |
+| GET | `/pdf/{filename}` | Serve original PDF |
+| GET | `/graph` | Knowledge graph data (JSON) |
+| GET | `/metadata` | All document metadata |
+| POST | `/upload` | Upload a document (multipart) |
+| POST | `/chat` | Send a message |
+| DELETE | `/documents/{filename}` | Remove a document |
+
+## Backend Modules
+
+| File | Purpose |
+|------|---------|
+| `server.py` | HTTP server, routing, request handling |
+| `database.py` | PostgreSQL schema, connection, CRUD operations |
+| `pdf_pipeline.py` | Claude Vision extraction, chunking, embedding |
+| `metadata.py` | Keyword/concept/contradiction/concern extraction |
+| `search.py` | Hybrid search with RRF fusion |
+| `graph.py` | Knowledge graph edge builder |
+
+## iOS App Structure
+
+| File | Purpose |
+|------|---------|
+| `CodeofConductAIAssistantApp.swift` | App entry point |
+| `ChatView.swift` | Main UI: messages, input, PDF viewer, graph |
+| `ChatViewModel.swift` | State management, API calls |
+| `APIService.swift` | HTTP client for backend communication |
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0 — see [LICENSE](LICENSE) for details.
+This project is licensed under the GNU General Public License v3.0. See the LICENSE file for details.

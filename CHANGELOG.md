@@ -1,50 +1,59 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to the AI Document Assistant.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [0.2.0] - 2026-03-08
+## [1.0.0] - 2026-03-08
 
 ### Added
-
-- Conversational AI tone — Claude now responds in a warm, professional style instead of raw markdown
-- Clickable reference links — inline `[Section X](ref://...)` links in replies open the source document
-- PDF viewer modal in web interface for viewing original documents without leaving the chat
-- PDF viewer sheet in iOS app using WebKit for native document viewing
-- Original PDF preservation — server stores raw PDF bytes alongside extracted text
-- New `/pdf/{filename}` endpoint to serve original PDFs for in-app viewing
-- `pdf_urls` field in chat API response for client-side link resolution
-- App icon (1024x1024) — teal-blue gradient with white question mark, Alberta Wallet style
-- Security section in README documenting API key handling
+- PostgreSQL + pgvector database backend (replaces in-memory storage)
+- Claude Vision PDF processing — each page analyzed individually for structured markdown extraction
+- Local vector embeddings using sentence-transformers (all-MiniLM-L6-v2, 384 dimensions)
+- Hybrid search combining vector similarity and PostgreSQL full-text search with Reciprocal Rank Fusion
+- Automated metadata extraction: keywords, concepts, contradictions, and concerns per document
+- Interactive D3.js force-directed knowledge graph visualization
+- Copy and download buttons on assistant messages
+- Real-time processing status banner during document upload
+- Background document processing (server stays responsive during uploads)
+- New API endpoints: /graph, /metadata, /documents/status
+- iOS knowledge graph viewer sheet
+- iOS context menu with copy and share actions on messages
+- iOS processing status banner
 
 ### Changed
-
-- System prompt rewritten for conversational, non-markdown responses with inline citations
-- `max_tokens` increased from 1024 to 2048 for more detailed responses
-- Chat API response now includes `pdf_urls` alongside `sources`
-- Web chat UI now renders HTML-formatted replies with clickable links
-- iOS `ChatMessage` model updated to carry `pdfURLs` dictionary
-- README updated with new features, architecture diagram, and security notes
+- Chat now uses hybrid search to find relevant chunks instead of dumping full document text
+- System prompt updated to include search results and metadata context
+- Web UI completely redesigned with side panels for documents and graph
+- iOS timeout increased to 120 seconds for longer processing operations
+- DocumentInfo model now includes page count
 
 ### Fixed
+- Documents larger than 16,000 characters are now fully searchable (no more truncation)
 
-- iOS build errors from missing `import Combine`
-- Deprecated `onChange(of:perform:)` updated to iOS 17+ syntax
-
-## [0.1.0] - 2026-03-08
+## [0.2.0] - 2026-03-07
 
 ### Added
+- Professional but warm conversational AI tone
+- Clickable document section references (ref:// links)
+- In-app PDF viewer using WebKit (web) and WKWebView (iOS)
+- Original PDF storage and serving via /pdf/ endpoint
+- App icon (1024x1024, teal-blue gradient with white "?")
+- DELETE endpoint for removing documents
 
-- Python backend server using built-in `http.server` and the Anthropic Claude API
-- Web-based chat interface (`index.html`) with responsive design
-- Document upload support via web UI (paperclip button) and REST API
-- PDF text extraction using `pdftotext` (via poppler)
-- Support for TXT, MD, and CSV file uploads
-- Multi-turn conversation with history tracking
-- Source citation in responses (shows which documents were referenced)
-- JSON-based REST API with endpoints for upload, chat, documents list, and delete
-- CORS support for cross-origin requests (iOS app, external clients)
-- iOS app scaffolding (Swift/SwiftUI) with chat interface and document picker
-- Setup guide with step-by-step instructions for backend, web, and iOS
+### Changed
+- System prompt rewritten for conversational style (no markdown formatting in responses)
+- Chat responses include pdf_urls for source documents
+
+### Fixed
+- Multipart form parser rewritten to properly handle PDF binary data
+- Claude no longer hallucinates information not present in documents
+
+## [0.1.0] - 2026-03-07
+
+### Added
+- Initial release
+- Python backend server using http.server
+- Document upload (PDF, TXT, MD) with pdftotext extraction
+- Claude-powered chat with document context
+- Web chat interface
+- iOS SwiftUI app with chat, document picker, and document list
+- CORS support for cross-origin requests
