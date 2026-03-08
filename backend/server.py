@@ -1,10 +1,12 @@
 """
-AI Document Assistant — Backend Server
-=======================================
-A simple server that:
+AI Document Assistant — Backend Server (v0.2)
+==============================================
+A server that:
   1. Serves a web chat interface
-  2. Ingests your documents (PDF, TXT, MD)
-  3. Uses Claude to answer questions grounded in your documents
+  2. Ingests documents (PDF, TXT, MD) — stores both raw and extracted text
+  3. Uses Claude to answer questions in a warm, conversational tone
+  4. Returns answers with clickable references to document sections
+  5. Serves original PDFs for in-app viewing
 
 To run:
     cd backend
@@ -20,7 +22,7 @@ import json
 import subprocess
 import tempfile
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 from pathlib import Path
 import requests
 
@@ -34,10 +36,11 @@ PORT = 8000
 # ---------------------------------------------------------------------------
 # In-memory document store
 # ---------------------------------------------------------------------------
-documents = {}  # filename -> text content
+documents = {}       # filename -> extracted text
+documents_raw = {}   # filename -> raw bytes (for serving original PDFs)
 
 # ---------------------------------------------------------------------------
-# Claude API (using raw HTTP via requests)
+# Claude API
 # ---------------------------------------------------------------------------
 def call_claude(system_prompt, messages):
     """Call the Anthropic Messages API directly via requests."""
@@ -50,11 +53,11 @@ def call_claude(system_prompt, messages):
         },
         json={
             "model": CLAUDE_MODEL,
-            "max_tokens": 1024,
+            "max_tokens": 2048,
             "system": system_prompt,
             "messages": messages,
         },
-        timeout=60,
+        timeout=90,
     )
     resp.raise_for_status()
     data = resp.json()
@@ -69,6 +72,25 @@ def build_document_context():
         trimmed = text[:16000]
         parts.append(f"--- Document: {filename} ---\n{trimmed}")
     return "\n\n".join(parts)
+
+
+SYSTEM_PROMPT_TEMPLATE = """You are a friendly, knowledgeable assistant for the Government of Alberta public service.
+You answer questions based on uploaded policy documents in a warm, professional, and conversational tone.
+
+IMPORTANT STYLE GUIDELINES:
+- Be conversational and approachable — like a helpful colleague, not a textbook.
+- Do NOT use markdown formatting (no ##, **, -, or bullet lists). Write in flowing, natural paragraphs.
+- When referencing a specific section of a document, include an inline link using this exact format:
+  [Section X](ref://FILENAME/section/SECTION_NUMBER)
+  For example: [Section 14](ref://Code of Conduct.pdf/section/14)
+- Explain concepts in plain language. If the document uses legalistic phrasing, paraphrase it naturally
+  and then note the official wording.
+- If someone asks about something not covered in the documents, be upfront about it.
+  Say something like "I don't see anything about that in the documents I have, but you might want to check with..."
+- End responses with a brief, friendly offer to help further when appropriate.
+
+DOCUMENTS:
+{context}"""
 
 
 def extract_text(filename, content):
@@ -119,6 +141,16 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_bytes(self, data, content_type, filename=None):
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        if filename:
+            self.send_header("Content-Disposition", f'inline; filename="{filename}"')
+        self.end_headers()
+        self.wfile.write(data)
+
     def _read_body(self):
         length = int(self.headers.get("Content-Length", 0))
         return self.rfile.read(length)
@@ -136,27 +168,37 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
 
         if path == "/":
-            # Serve the web chat interface
-            html_path = os.path.join(os.path.dirname(__file__), "index.html")
+            html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
             try:
                 with open(html_path) as f:
                     self._send_html(f.read())
             except FileNotFoundError:
                 self._send_json({"status": "running", "documents_loaded": len(documents)})
 
+        elif path == "/api":
+            self._send_json({"status": "running", "documents_loaded": len(documents)})
+
         elif path == "/documents":
             self._send_json({
                 "count": len(documents),
                 "documents": [
-                    {"filename": n, "characters": len(t)}
+                    {
+                        "filename": n,
+                        "characters": len(t),
+                        "has_pdf": n in documents_raw,
+                    }
                     for n, t in documents.items()
                 ],
             })
-        elif path == "/api":
-            self._send_json({
-                "status": "running",
-                "documents_loaded": len(documents),
-            })
+
+        elif path.startswith("/pdf/"):
+            # Serve original PDF for in-app viewing
+            filename = unquote(path[5:])
+            if filename in documents_raw:
+                self._send_bytes(documents_raw[filename], "application/pdf", filename)
+            else:
+                self._send_json({"error": "PDF not found"}, 404)
+
         else:
             self._send_json({"error": "Not found"}, 404)
 
@@ -174,11 +216,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         path = urlparse(self.path).path
         if path.startswith("/documents/"):
-            filename = path.replace("/documents/", "", 1)
-            from urllib.parse import unquote
-            filename = unquote(filename)
+            filename = unquote(path[len("/documents/"):])
             if filename in documents:
                 del documents[filename]
+                documents_raw.pop(filename, None)
                 self._send_json({"message": f"Deleted '{filename}'.", "documents_loaded": len(documents)})
             else:
                 self._send_json({"error": "Document not found"}, 404)
@@ -204,7 +245,10 @@ class Handler(BaseHTTPRequestHandler):
 
                     file_data = file_data.rstrip(b"\r\n--")
 
-                    # Extract text from the file
+                    # Store raw bytes for PDFs
+                    if Path(filename).suffix.lower() == ".pdf":
+                        documents_raw[filename] = file_data
+
                     text = extract_text(filename, file_data)
                     documents[filename] = text
 
@@ -245,14 +289,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         doc_context = build_document_context()
-
-        system_prompt = f"""You are a helpful assistant that answers questions based on
-the following documents. Always ground your answers in the provided documents.
-If the answer isn't in the documents, say so honestly.
-When you reference information, mention which document it came from.
-
-DOCUMENTS:
-{doc_context}"""
+        system_prompt = SYSTEM_PROMPT_TEMPLATE.format(context=doc_context)
 
         history = body.get("conversation_history", [])
         messages = []
@@ -268,7 +305,18 @@ DOCUMENTS:
             sources = [n for n in documents if n.lower() in reply.lower()]
             if not sources and documents:
                 sources = list(documents.keys())
-            self._send_json({"reply": reply, "sources": sources})
+
+            # Build PDF URLs for any documents that have original PDFs stored
+            pdf_urls = {}
+            for src in sources:
+                if src in documents_raw:
+                    pdf_urls[src] = f"/pdf/{src}"
+
+            self._send_json({
+                "reply": reply,
+                "sources": sources,
+                "pdf_urls": pdf_urls,
+            })
         except Exception as e:
             self._send_json({"error": str(e)}, 500)
 
@@ -280,7 +328,7 @@ DOCUMENTS:
 # Main
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    print(f"\n  AI Document Assistant running on http://localhost:{PORT}")
+    print(f"\n  AI Document Assistant v0.2 running on http://localhost:{PORT}")
     print(f"  Open http://localhost:{PORT} in your browser to chat.")
     print(f"  Documents loaded: {len(documents)}")
     print(f"  API key: {'configured' if ANTHROPIC_API_KEY else 'MISSING'}\n")

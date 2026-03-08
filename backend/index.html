@@ -24,10 +24,7 @@
             align-items: center;
         }
 
-        header h1 {
-            font-size: 18px;
-            font-weight: 600;
-        }
+        header h1 { font-size: 18px; font-weight: 600; }
 
         #doc-count {
             font-size: 13px;
@@ -49,9 +46,8 @@
             max-width: 75%;
             padding: 12px 16px;
             border-radius: 16px;
-            line-height: 1.5;
+            line-height: 1.6;
             font-size: 15px;
-            white-space: pre-wrap;
         }
 
         .message.user {
@@ -67,6 +63,18 @@
             color: #1a1a1a;
             border-bottom-left-radius: 4px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .message.assistant a.ref-link {
+            color: #2563eb;
+            text-decoration: none;
+            border-bottom: 1px dotted #2563eb;
+            cursor: pointer;
+        }
+
+        .message.assistant a.ref-link:hover {
+            color: #1d4ed8;
+            border-bottom-style: solid;
         }
 
         .message.system {
@@ -92,6 +100,13 @@
             padding-top: 8px;
             border-top: 1px solid #eee;
         }
+
+        .sources a {
+            color: #2563eb;
+            text-decoration: none;
+        }
+
+        .sources a:hover { text-decoration: underline; }
 
         .typing {
             align-self: flex-start;
@@ -167,6 +182,58 @@
 
         .welcome h2 { font-size: 20px; margin-bottom: 8px; color: #555; }
         .welcome p { font-size: 14px; line-height: 1.6; }
+
+        /* PDF Viewer Modal */
+        #pdf-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #pdf-modal.active { display: flex; }
+
+        #pdf-modal-inner {
+            background: white;
+            border-radius: 12px;
+            width: 90%;
+            height: 90%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #pdf-modal-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #pdf-modal-header span { font-weight: 600; font-size: 14px; }
+
+        #pdf-modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        #pdf-modal-close:hover { background: #f0f0f0; }
+
+        #pdf-modal iframe {
+            flex: 1;
+            border: none;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -189,6 +256,17 @@
         <button id="send-btn" disabled>&#8593;</button>
     </div>
 
+    <!-- PDF Viewer Modal -->
+    <div id="pdf-modal">
+        <div id="pdf-modal-inner">
+            <div id="pdf-modal-header">
+                <span id="pdf-modal-title">Document</span>
+                <button id="pdf-modal-close">&times;</button>
+            </div>
+            <iframe id="pdf-modal-iframe" src=""></iframe>
+        </div>
+    </div>
+
     <script>
         const API = "http://localhost:8000";
         const chatContainer = document.getElementById("chat-container");
@@ -197,9 +275,31 @@
         const uploadBtn = document.getElementById("upload-btn");
         const fileInput = document.getElementById("file-input");
         const docCount = document.getElementById("doc-count");
+        const pdfModal = document.getElementById("pdf-modal");
+        const pdfModalTitle = document.getElementById("pdf-modal-title");
+        const pdfModalIframe = document.getElementById("pdf-modal-iframe");
+        const pdfModalClose = document.getElementById("pdf-modal-close");
 
         let conversationHistory = [];
         let isLoading = false;
+        let currentPdfUrls = {};  // Track available PDF URLs
+
+        // PDF Modal controls
+        pdfModalClose.addEventListener("click", closePdfModal);
+        pdfModal.addEventListener("click", (e) => {
+            if (e.target === pdfModal) closePdfModal();
+        });
+
+        function openPdfModal(filename, url) {
+            pdfModalTitle.textContent = filename;
+            pdfModalIframe.src = url;
+            pdfModal.classList.add("active");
+        }
+
+        function closePdfModal() {
+            pdfModal.classList.remove("active");
+            pdfModalIframe.src = "";
+        }
 
         // Auto-resize textarea
         messageInput.addEventListener("input", () => {
@@ -208,7 +308,6 @@
             sendBtn.disabled = !messageInput.value.trim() || isLoading;
         });
 
-        // Send on Enter (Shift+Enter for new line)
         messageInput.addEventListener("keydown", (e) => {
             if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -220,7 +319,6 @@
         uploadBtn.addEventListener("click", () => fileInput.click());
         fileInput.addEventListener("change", uploadFile);
 
-        // Check for existing documents on load
         fetchDocCount();
 
         async function fetchDocCount() {
@@ -233,19 +331,55 @@
             }
         }
 
-        function addMessage(content, type, sources) {
-            // Remove welcome message if present
+        function processReplyContent(text, pdfUrls) {
+            // Convert ref:// links to clickable links that open the PDF modal
+            // Pattern: [Link Text](ref://FILENAME/section/SECTION_NUMBER)
+            let html = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+            // Handle ref:// links
+            html = html.replace(
+                /\[([^\]]+)\]\(ref:\/\/([^)]+)\)/g,
+                function(match, linkText, refPath) {
+                    const filename = refPath.split("/section/")[0];
+                    const pdfUrl = pdfUrls[filename];
+                    if (pdfUrl) {
+                        return `<a class="ref-link" href="#" onclick="openPdfModal('${filename.replace(/'/g, "\\'")}', '${API}${pdfUrl}'); return false;">${linkText}</a>`;
+                    }
+                    return `<a class="ref-link" href="#" title="Source: ${filename}">${linkText}</a>`;
+                }
+            );
+
+            // Preserve newlines
+            html = html.replace(/\n/g, "<br>");
+
+            return html;
+        }
+
+        function addMessage(content, type, sources, pdfUrls) {
             const welcome = chatContainer.querySelector(".welcome");
             if (welcome) welcome.remove();
 
             const div = document.createElement("div");
             div.className = `message ${type}`;
-            div.textContent = content;
 
-            if (sources && sources.length > 0) {
+            if (type === "assistant" && pdfUrls) {
+                div.innerHTML = processReplyContent(content, pdfUrls);
+                currentPdfUrls = { ...currentPdfUrls, ...pdfUrls };
+            } else {
+                div.textContent = content;
+            }
+
+            if (sources && sources.length > 0 && type === "assistant") {
                 const srcDiv = document.createElement("div");
                 srcDiv.className = "sources";
-                srcDiv.textContent = "Sources: " + sources.join(", ");
+                const sourceLinks = sources.map(s => {
+                    const pdfUrl = (pdfUrls || {})[s];
+                    if (pdfUrl) {
+                        return `<a href="#" onclick="openPdfModal('${s.replace(/'/g, "\\'")}', '${API}${pdfUrl}'); return false;">View ${s}</a>`;
+                    }
+                    return s;
+                }).join(" &middot; ");
+                srcDiv.innerHTML = "Sources: " + sourceLinks;
                 div.appendChild(srcDiv);
             }
 
@@ -296,7 +430,7 @@
                 if (data.error) {
                     addMessage(data.error, "error");
                 } else {
-                    addMessage(data.reply, "assistant", data.sources);
+                    addMessage(data.reply, "assistant", data.sources, data.pdf_urls || {});
                     conversationHistory.push({ role: "user", content: text });
                     conversationHistory.push({ role: "assistant", content: data.reply });
                 }
