@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Document Assistant v1.0</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+    <title>AI Document Assistant v1.0.1</title>
+    <!-- D3.js only needed on graph page now -->
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -40,13 +40,35 @@
             background: none;
             border: 1px solid #d1d1d6;
             border-radius: 8px;
-            padding: 6px 12px;
-            font-size: 13px;
+            padding: 7px 9px;
+            font-size: 14px;
             cursor: pointer;
-            color: #007aff;
+            color: #6e6e73;
             transition: all 0.2s;
+            position: relative;
+            line-height: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        .header-btn:hover { background: #f0f0f5; }
+        .header-btn svg { display: block; }
+        .header-btn:hover { background: #f0f0f5; color: #1d1d1f; }
+        .header-btn[title]:hover::after {
+            content: attr(title);
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 6px;
+            background: #333;
+            color: white;
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            white-space: nowrap;
+            z-index: 100;
+            pointer-events: none;
+        }
         .header-btn.active {
             background: #007aff;
             color: white;
@@ -107,21 +129,40 @@
             display: flex;
             gap: 4px;
             margin-top: 6px;
-            opacity: 0;
-            transition: opacity 0.2s;
         }
-        .message:hover .message-actions { opacity: 1; }
         .msg-action-btn {
             background: none;
             border: 1px solid #d1d1d6;
             border-radius: 6px;
-            padding: 3px 8px;
-            font-size: 11px;
+            padding: 4px 6px;
+            font-size: 14px;
             cursor: pointer;
-            color: #666;
+            color: #8e8e93;
             transition: all 0.2s;
+            position: relative;
+            line-height: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
-        .msg-action-btn:hover { background: #f0f0f5; color: #007aff; }
+        .msg-action-btn svg { display: block; }
+        .msg-action-btn:hover { background: #f0f0f5; color: #1d1d1f; }
+        .msg-action-btn[title]:hover::after {
+            content: attr(title);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 6px;
+            background: #333;
+            color: white;
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 5px;
+            white-space: nowrap;
+            z-index: 100;
+            pointer-events: none;
+        }
 
         /* Sources */
         .sources {
@@ -234,51 +275,7 @@
         /* Hidden file input */
         .file-input { display: none; }
 
-        /* Graph panel */
-        .graph-panel {
-            width: 0;
-            overflow: hidden;
-            transition: width 0.3s ease;
-            border-left: 1px solid #e0e0e0;
-            background: white;
-            position: relative;
-        }
-        .graph-panel.open { width: 450px; }
-        .graph-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 16px;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        .graph-header h3 { font-size: 14px; font-weight: 600; }
-        .graph-close {
-            background: none;
-            border: none;
-            font-size: 18px;
-            cursor: pointer;
-            color: #666;
-        }
-        #graph-svg {
-            width: 100%;
-            height: calc(100% - 48px);
-        }
-        .graph-node-label {
-            font-size: 10px;
-            fill: #333;
-            pointer-events: none;
-        }
-        .graph-tooltip {
-            position: absolute;
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 6px 10px;
-            border-radius: 6px;
-            font-size: 12px;
-            pointer-events: none;
-            display: none;
-            z-index: 100;
-        }
+        /* Graph opens in new tab */
 
         /* PDF modal */
         .modal-overlay {
@@ -399,8 +396,10 @@
 <div class="header">
     <h1>AI Document Assistant</h1>
     <div class="header-actions">
-        <button class="header-btn" id="docsBtn" onclick="toggleDocs()">Documents</button>
-        <button class="header-btn" id="graphBtn" onclick="toggleGraph()">Knowledge Graph</button>
+        <button class="header-btn" id="newChatBtn" title="New Chat" onclick="if(confirm('Start a new conversation? Current chat will be cleared.')) clearChat()"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg></button>
+        <button class="header-btn" id="saveBtn" title="Save Conversation" onclick="saveConversation()"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8M4 7l4 4 4-4M3 13h10"/></svg></button>
+        <button class="header-btn" id="docsBtn" title="Documents" onclick="toggleDocs()"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2h5l4 4v8H4z"/><path d="M9 2v4h4"/></svg></button>
+        <button class="header-btn" id="graphBtn" title="Knowledge Graph" onclick="window.open('/graph-view', '_blank')"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="8" cy="13" r="2"/><line x1="5.5" y1="5.5" x2="7" y2="11"/><line x1="10.5" y1="5.5" x2="9" y2="11"/><line x1="6" y1="4" x2="10" y2="4"/></svg></button>
     </div>
 </div>
 
@@ -423,15 +422,7 @@
         </div>
     </div>
 
-    <!-- Graph panel -->
-    <div class="graph-panel" id="graphPanel">
-        <div class="graph-header">
-            <h3>Knowledge Graph</h3>
-            <button class="graph-close" onclick="toggleGraph()">&times;</button>
-        </div>
-        <svg id="graph-svg"></svg>
-        <div class="graph-tooltip" id="graphTooltip"></div>
-    </div>
+    <!-- Graph opens in new tab now -->
 </div>
 
 <!-- Documents panel -->
@@ -462,19 +453,61 @@
 <script>
     // State
     let conversationHistory = [];
+    let allMessages = [];  // {role, content, sources, pdfUrls}
     let currentPdfUrls = {};
     let isLoading = false;
     let processingPollTimer = null;
 
+    // ---- LocalStorage persistence ----
+
+    function saveState() {
+        try {
+            localStorage.setItem('chat_history', JSON.stringify(conversationHistory));
+            localStorage.setItem('chat_messages', JSON.stringify(allMessages));
+            localStorage.setItem('chat_pdf_urls', JSON.stringify(currentPdfUrls));
+        } catch (e) { /* ignore quota errors */ }
+    }
+
+    function loadState() {
+        try {
+            const h = localStorage.getItem('chat_history');
+            const m = localStorage.getItem('chat_messages');
+            const p = localStorage.getItem('chat_pdf_urls');
+            if (h) conversationHistory = JSON.parse(h);
+            if (m) allMessages = JSON.parse(m);
+            if (p) currentPdfUrls = JSON.parse(p);
+        } catch (e) { /* ignore parse errors */ }
+    }
+
+    function clearChat() {
+        conversationHistory = [];
+        allMessages = [];
+        currentPdfUrls = {};
+        localStorage.removeItem('chat_history');
+        localStorage.removeItem('chat_messages');
+        localStorage.removeItem('chat_pdf_urls');
+        document.getElementById('messages').innerHTML = '';
+        addMessage('assistant', 'Welcome! Upload a document using the paperclip button, then ask me anything about it. This version uses AI-powered document analysis with smart search to find the most relevant sections for your questions.');
+    }
+
     // Init
     window.addEventListener('load', () => {
-        addMessage('assistant', 'Welcome! Upload a document using the paperclip button, then ask me anything about it. This version uses AI-powered document analysis with smart search to find the most relevant sections for your questions.');
+        loadState();
+
+        if (allMessages.length > 0) {
+            // Restore previous conversation
+            for (const msg of allMessages) {
+                addMessage(msg.role, msg.content, msg.sources || [], msg.pdfUrls || {}, true);
+            }
+        } else {
+            addMessage('assistant', 'Welcome! Upload a document using the paperclip button, then ask me anything about it. This version uses AI-powered document analysis with smart search to find the most relevant sections for your questions.');
+        }
         fetchDocuments();
     });
 
     // ---- Messages ----
 
-    function addMessage(role, content, sources = [], pdfUrls = {}) {
+    function addMessage(role, content, sources = [], pdfUrls = {}, skipSave = false) {
         const messagesDiv = document.getElementById('messages');
         const msgDiv = document.createElement('div');
         msgDiv.className = `message ${role}`;
@@ -485,8 +518,8 @@
         if (role === 'assistant' && content !== 'Welcome!') {
             bubbleHTML += `
                 <div class="message-actions">
-                    <button class="msg-action-btn" onclick="copyMessage(this)">Copy</button>
-                    <button class="msg-action-btn" onclick="downloadMessage(this)">Download</button>
+                    <button class="msg-action-btn" title="Copy" onclick="copyMessage(this)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5V3a1 1 0 011-1h6.5A1.5 1.5 0 0111 3.5V5"/></svg></button>
+                    <button class="msg-action-btn" title="Download" onclick="downloadMessage(this)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8M4 7l4 4 4-4M3 13h10"/></svg></button>
                 </div>`;
         }
 
@@ -511,6 +544,12 @@
         // Store PDF URLs for ref links
         if (pdfUrls) {
             Object.assign(currentPdfUrls, pdfUrls);
+        }
+
+        // Track message and persist
+        if (!skipSave) {
+            allMessages.push({ role, content, sources, pdfUrls });
+            saveState();
         }
     }
 
@@ -544,8 +583,10 @@
         safe = safe.replace(
             /\[([^\]]+)\]\(ref:\/\/([^)]+)\)/g,
             (match, label, refPath) => {
-                const filename = refPath.split('/section/')[0];
-                return `<span class="ref-link" onclick="handleRefClick('${escapeAttr(filename)}')">${escapeHtml(label)}</span>`;
+                const parts = refPath.split('/page/');
+                const filename = parts[0];
+                const page = parts.length > 1 ? parts[1] : (refPath.split('/section/')[0] !== refPath ? '' : '');
+                return `<span class="ref-link" onclick="handleRefClick('${escapeAttr(filename)}', '${escapeAttr(page)}')">${escapeHtml(label)}</span>`;
             }
         );
         // Convert line breaks
@@ -557,10 +598,11 @@
         return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
     }
 
-    function handleRefClick(filename) {
+    function handleRefClick(filename, page) {
         const pdfPath = currentPdfUrls[filename];
         if (pdfPath) {
-            openPdfModal(filename, pdfPath);
+            const url = page ? pdfPath + '#page=' + page : pdfPath;
+            openPdfModal(filename + (page ? ' — Page ' + page : ''), url);
         }
     }
 
@@ -595,6 +637,7 @@
                 addMessage('assistant', data.reply, data.sources || [], data.pdf_urls || {});
                 conversationHistory.push({ role: 'user', content: text });
                 conversationHistory.push({ role: 'assistant', content: data.reply });
+                saveState();
             }
         } catch (err) {
             removeTypingIndicator();
@@ -775,141 +818,34 @@
         setTimeout(() => toast.classList.remove('visible'), 2000);
     }
 
-    // ---- Knowledge Graph (D3.js) ----
+    // ---- Save Conversation ----
 
-    let graphSimulation = null;
-
-    function toggleGraph() {
-        const panel = document.getElementById('graphPanel');
-        const btn = document.getElementById('graphBtn');
-        panel.classList.toggle('open');
-        btn.classList.toggle('active');
-        if (panel.classList.contains('open')) {
-            setTimeout(loadGraph, 300); // wait for panel animation
-        }
-    }
-
-    async function loadGraph() {
-        const panel = document.getElementById('graphPanel');
-        if (!panel.classList.contains('open')) return;
-
-        try {
-            const resp = await fetch('/graph');
-            const data = await resp.json();
-            renderGraph(data);
-        } catch (e) {
-            console.error('Graph load failed:', e);
-        }
-    }
-
-    function renderGraph(data) {
-        const svg = d3.select('#graph-svg');
-        svg.selectAll('*').remove();
-
-        if (!data.nodes || data.nodes.length === 0) {
-            svg.append('text')
-                .attr('x', '50%')
-                .attr('y', '50%')
-                .attr('text-anchor', 'middle')
-                .attr('fill', '#999')
-                .attr('font-size', '14px')
-                .text('Upload documents to see the knowledge graph');
+    function saveConversation() {
+        if (conversationHistory.length === 0) {
+            showToast('No conversation to save yet');
             return;
         }
 
-        const width = document.getElementById('graph-svg').clientWidth;
-        const height = document.getElementById('graph-svg').clientHeight;
+        let text = 'AI Document Assistant — Conversation Log\n';
+        text += 'Date: ' + new Date().toLocaleString() + '\n';
+        text += '='.repeat(50) + '\n\n';
 
-        const tooltip = document.getElementById('graphTooltip');
+        for (const turn of conversationHistory) {
+            const label = turn.role === 'user' ? 'You' : 'Assistant';
+            text += label + ':\n' + turn.content + '\n\n' + '-'.repeat(40) + '\n\n';
+        }
 
-        // Color scale
-        const colorScale = {
-            'document': '#007aff',
-            'concept': '#34c759',
-            'keyword': '#ff9500'
-        };
-
-        // Force simulation
-        if (graphSimulation) graphSimulation.stop();
-
-        graphSimulation = d3.forceSimulation(data.nodes)
-            .force('link', d3.forceLink(data.links).id(d => d.id).distance(80))
-            .force('charge', d3.forceManyBody().strength(-200))
-            .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(d => d.size + 5));
-
-        // Links
-        const link = svg.append('g')
-            .selectAll('line')
-            .data(data.links)
-            .join('line')
-            .attr('stroke', '#ddd')
-            .attr('stroke-width', d => Math.min(d.weight || 1, 4))
-            .attr('stroke-opacity', 0.6);
-
-        // Nodes
-        const node = svg.append('g')
-            .selectAll('circle')
-            .data(data.nodes)
-            .join('circle')
-            .attr('r', d => d.size || 8)
-            .attr('fill', d => colorScale[d.type] || '#999')
-            .attr('stroke', 'white')
-            .attr('stroke-width', 2)
-            .style('cursor', 'pointer')
-            .on('mouseover', function(event, d) {
-                tooltip.style.display = 'block';
-                tooltip.textContent = `${d.type}: ${d.label}`;
-                tooltip.style.left = (event.offsetX + 10) + 'px';
-                tooltip.style.top = (event.offsetY - 30) + 'px';
-                d3.select(this).attr('stroke', '#333').attr('stroke-width', 3);
-            })
-            .on('mouseout', function() {
-                tooltip.style.display = 'none';
-                d3.select(this).attr('stroke', 'white').attr('stroke-width', 2);
-            })
-            .call(d3.drag()
-                .on('start', (event, d) => {
-                    if (!event.active) graphSimulation.alphaTarget(0.3).restart();
-                    d.fx = d.x;
-                    d.fy = d.y;
-                })
-                .on('drag', (event, d) => {
-                    d.fx = event.x;
-                    d.fy = event.y;
-                })
-                .on('end', (event, d) => {
-                    if (!event.active) graphSimulation.alphaTarget(0);
-                    d.fx = null;
-                    d.fy = null;
-                })
-            );
-
-        // Labels
-        const labels = svg.append('g')
-            .selectAll('text')
-            .data(data.nodes)
-            .join('text')
-            .attr('class', 'graph-node-label')
-            .attr('dy', d => d.size + 14)
-            .attr('text-anchor', 'middle')
-            .text(d => d.label.length > 20 ? d.label.slice(0, 18) + '...' : d.label);
-
-        // Tick
-        graphSimulation.on('tick', () => {
-            link
-                .attr('x1', d => d.source.x)
-                .attr('y1', d => d.source.y)
-                .attr('x2', d => d.target.x)
-                .attr('y2', d => d.target.y);
-            node
-                .attr('cx', d => d.x)
-                .attr('cy', d => d.y);
-            labels
-                .attr('x', d => d.x)
-                .attr('y', d => d.y);
-        });
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'conversation-' + new Date().toISOString().slice(0, 10) + '.txt';
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Conversation saved');
     }
+
+    // Knowledge Graph opens in a new tab via window.open (see button onclick)
 </script>
 </body>
 </html>

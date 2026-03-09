@@ -97,7 +97,7 @@ def init_db():
                 SELECT 1 FROM pg_indexes WHERE indexname = 'idx_chunks_embedding'
             ) THEN
                 CREATE INDEX idx_chunks_embedding ON chunks
-                    USING hnsw (embedding vector_cosine_ops)
+                    USING hnsw (embedding vector_cosine_ops);
             END IF;
         END
         $$;

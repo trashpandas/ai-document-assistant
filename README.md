@@ -1,6 +1,6 @@
 # AI Document Assistant
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.0.1-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-green)
 ![License](https://img.shields.io/badge/license-GPLv3-orange)
 ![PostgreSQL](https://img.shields.io/badge/postgresql-16%2B-blue)
@@ -41,8 +41,9 @@ Upload a PDF and the system will analyze every page using Claude Vision to extra
 
 **Metadata & Knowledge Graph**
 - Automated extraction of keywords, concepts, contradictions, and concerns
-- Interactive D3.js force-directed graph visualization
+- Full-page interactive D3.js knowledge graph with dark theme, zoom/pan, and hover highlighting
 - Document-to-concept and document-to-document relationship mapping
+- Visible connection lines with relationship labels
 
 **Chat Interface**
 - Warm, conversational tone (like a helpful colleague)
@@ -104,6 +105,7 @@ Open http://localhost:8000 in your browser.
 | GET | `/documents/status` | Processing status for uploads |
 | GET | `/pdf/{filename}` | Serve original PDF |
 | GET | `/graph` | Knowledge graph data (JSON) |
+| GET | `/graph-view` | Full-page interactive knowledge graph |
 | GET | `/metadata` | All document metadata |
 | POST | `/upload` | Upload a document (multipart) |
 | POST | `/chat` | Send a message |
@@ -119,6 +121,7 @@ Open http://localhost:8000 in your browser.
 | `metadata.py` | Keyword/concept/contradiction/concern extraction |
 | `search.py` | Hybrid search with RRF fusion |
 | `graph.py` | Knowledge graph edge builder |
+| `graph.html` | Full-page D3.js knowledge graph visualization |
 
 ## iOS App Structure
 

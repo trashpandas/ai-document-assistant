@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knowledge Graph — AI Document Assistant</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #e6edf3;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Header bar */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 24px;
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            position: relative;
+            z-index: 10;
+        }
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e6edf3;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .back-btn {
+            background: none;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 6px 14px;
+            font-size: 13px;
+            cursor: pointer;
+            color: #58a6ff;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+        .back-btn:hover { background: #1f2937; border-color: #58a6ff; }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+            color: #8b949e;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        /* Graph container */
+        #graph-container {
+            width: 100%;
+            height: calc(100vh - 52px);
+            position: relative;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+        svg:active { cursor: grabbing; }
+
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            background: #1c2128;
+            border: 1px solid #30363d;
+            color: #e6edf3;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            pointer-events: none;
+            display: none;
+            z-index: 100;
+            max-width: 300px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+        .tooltip .tt-type {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #8b949e;
+            margin-bottom: 4px;
+        }
+        .tooltip .tt-label {
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        /* Empty state */
+        .empty-state {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #8b949e;
+        }
+        .empty-state h2 { font-size: 20px; margin-bottom: 8px; color: #e6edf3; }
+        .empty-state p { font-size: 14px; }
+
+        /* Zoom controls */
+        .zoom-controls {
+            position: absolute;
+            bottom: 24px;
+            right: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 10;
+        }
+        .zoom-btn {
+            width: 36px;
+            height: 36px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            color: #e6edf3;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .zoom-btn:hover { background: #1f2937; border-color: #58a6ff; }
+
+        /* Info panel */
+        .info-panel {
+            position: absolute;
+            bottom: 24px;
+            left: 24px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 14px 18px;
+            font-size: 13px;
+            color: #8b949e;
+            z-index: 10;
+        }
+        .info-panel strong { color: #e6edf3; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Knowledge Graph</h1>
+    <div class="header-right">
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-dot" style="background: #58a6ff;"></div>
+                Document
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background: #3fb950;"></div>
+                Concept
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background: #d29922;"></div>
+                Keyword
+            </div>
+        </div>
+        <a href="#" class="back-btn" onclick="window.close(); return false;">Close Graph</a>
+    </div>
+</div>
+
+<div id="graph-container">
+    <svg id="graph-svg"></svg>
+    <div class="tooltip" id="tooltip"></div>
+
+    <div class="zoom-controls">
+        <button class="zoom-btn" id="zoomIn" title="Zoom in">+</button>
+        <button class="zoom-btn" id="zoomOut" title="Zoom out">−</button>
+        <button class="zoom-btn" id="zoomReset" title="Reset view">⟲</button>
+    </div>
+
+    <div class="info-panel" id="infoPanel">
+        Loading graph...
+    </div>
+</div>
+
+<script>
+    const colorScale = {
+        'document': '#58a6ff',
+        'concept': '#3fb950',
+        'keyword': '#d29922'
+    };
+
+    let simulation = null;
+    let currentZoom = null;
+
+    async function loadGraph() {
+        try {
+            const resp = await fetch('/graph');
+            const data = await resp.json();
+            renderGraph(data);
+        } catch (e) {
+            document.getElementById('infoPanel').innerHTML = '<strong>Error loading graph.</strong> Is the server running?';
+        }
+    }
+
+    function renderGraph(data) {
+        const container = document.getElementById('graph-container');
+        const svg = d3.select('#graph-svg');
+        svg.selectAll('*').remove();
+
+        if (!data.nodes || data.nodes.length === 0) {
+            document.getElementById('infoPanel').innerHTML = '<strong>No data yet.</strong> Upload documents to build the graph.';
+            return;
+        }
+
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        const tooltip = document.getElementById('tooltip');
+
+        // Create a group that will be zoomed/panned
+        const g = svg.append('g');
+
+        // Zoom behavior
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 8])
+            .on('zoom', (event) => {
+                g.attr('transform', event.transform);
+            });
+
+        svg.call(zoom);
+        currentZoom = zoom;
+
+        // Zoom controls
+        document.getElementById('zoomIn').onclick = () => svg.transition().duration(300).call(zoom.scaleBy, 1.5);
+        document.getElementById('zoomOut').onclick = () => svg.transition().duration(300).call(zoom.scaleBy, 0.67);
+        document.getElementById('zoomReset').onclick = () => svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity.translate(width/2, height/2).scale(0.8).translate(-width/2, -height/2));
+
+        // Arrow marker for directed edges
+        svg.append('defs').append('marker')
+            .attr('id', 'arrowhead')
+            .attr('viewBox', '0 -5 10 10')
+            .attr('refX', 20)
+            .attr('refY', 0)
+            .attr('markerWidth', 6)
+            .attr('markerHeight', 6)
+            .attr('orient', 'auto')
+            .append('path')
+            .attr('d', 'M0,-5L10,0L0,5')
+            .attr('fill', '#30363d');
+
+        // Force simulation
+        if (simulation) simulation.stop();
+
+        simulation = d3.forceSimulation(data.nodes)
+            .force('link', d3.forceLink(data.links).id(d => d.id).distance(120))
+            .force('charge', d3.forceManyBody().strength(-300))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collision', d3.forceCollide().radius(d => (d.size || 8) + 15))
+            .force('x', d3.forceX(width / 2).strength(0.05))
+            .force('y', d3.forceY(height / 2).strength(0.05));
+
+        // Links (lines)
+        const link = g.append('g')
+            .attr('class', 'links')
+            .selectAll('line')
+            .data(data.links)
+            .join('line')
+            .attr('stroke', '#30363d')
+            .attr('stroke-width', d => Math.max(1.5, Math.min((d.weight || 1) * 2, 5)))
+            .attr('stroke-opacity', 0.7)
+            .attr('marker-end', 'url(#arrowhead)');
+
+        // Link labels
+        const linkLabel = g.append('g')
+            .attr('class', 'link-labels')
+            .selectAll('text')
+            .data(data.links)
+            .join('text')
+            .attr('font-size', '9px')
+            .attr('fill', '#484f58')
+            .attr('text-anchor', 'middle')
+            .text(d => d.relationship || '');
+
+        // Node groups
+        const node = g.append('g')
+            .attr('class', 'nodes')
+            .selectAll('g')
+            .data(data.nodes)
+            .join('g')
+            .style('cursor', 'pointer')
+            .call(d3.drag()
+                .on('start', (event, d) => {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    d.fx = d.x;
+                    d.fy = d.y;
+                })
+                .on('drag', (event, d) => {
+                    d.fx = event.x;
+                    d.fy = event.y;
+                })
+                .on('end', (event, d) => {
+                    if (!event.active) simulation.alphaTarget(0);
+                    d.fx = null;
+                    d.fy = null;
+                })
+            );
+
+        // Node circles
+        node.append('circle')
+            .attr('r', d => d.size || 8)
+            .attr('fill', d => colorScale[d.type] || '#8b949e')
+            .attr('stroke', '#0d1117')
+            .attr('stroke-width', 2)
+            .on('mouseover', function(event, d) {
+                d3.select(this)
+                    .transition().duration(150)
+                    .attr('stroke', colorScale[d.type] || '#fff')
+                    .attr('stroke-width', 3)
+                    .attr('r', (d.size || 8) + 3);
+
+                // Highlight connected links
+                link.attr('stroke', l =>
+                    (l.source.id === d.id || l.target.id === d.id) ? colorScale[d.type] || '#58a6ff' : '#30363d'
+                ).attr('stroke-opacity', l =>
+                    (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.3
+                );
+
+                tooltip.style.display = 'block';
+                tooltip.innerHTML = `<div class="tt-type">${d.type}</div><div class="tt-label">${d.label}</div>`;
+            })
+            .on('mousemove', function(event) {
+                tooltip.style.left = (event.pageX + 16) + 'px';
+                tooltip.style.top = (event.pageY - 16) + 'px';
+            })
+            .on('mouseout', function(event, d) {
+                d3.select(this)
+                    .transition().duration(150)
+                    .attr('stroke', '#0d1117')
+                    .attr('stroke-width', 2)
+                    .attr('r', d.size || 8);
+
+                link.attr('stroke', '#30363d').attr('stroke-opacity', 0.7);
+                tooltip.style.display = 'none';
+            });
+
+        // Node labels
+        node.append('text')
+            .attr('dy', d => (d.size || 8) + 16)
+            .attr('text-anchor', 'middle')
+            .attr('font-size', d => d.type === 'document' ? '12px' : '10px')
+            .attr('font-weight', d => d.type === 'document' ? '600' : '400')
+            .attr('fill', d => d.type === 'document' ? '#e6edf3' : '#8b949e')
+            .text(d => d.label.length > 30 ? d.label.slice(0, 28) + '...' : d.label);
+
+        // Tick
+        simulation.on('tick', () => {
+            link
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
+
+            linkLabel
+                .attr('x', d => (d.source.x + d.target.x) / 2)
+                .attr('y', d => (d.source.y + d.target.y) / 2);
+
+            node.attr('transform', d => `translate(${d.x},${d.y})`);
+        });
+
+        // Update info panel
+        const docCount = data.nodes.filter(n => n.type === 'document').length;
+        const conceptCount = data.nodes.filter(n => n.type === 'concept').length;
+        const keywordCount = data.nodes.filter(n => n.type === 'keyword').length;
+        document.getElementById('infoPanel').innerHTML =
+            `<strong>${data.nodes.length}</strong> nodes (${docCount} documents, ${conceptCount} concepts, ${keywordCount} keywords) · <strong>${data.links.length}</strong> connections<br>` +
+            `Scroll to zoom · Drag to pan · Drag nodes to rearrange`;
+    }
+
+    // Load on page ready
+    window.addEventListener('load', loadGraph);
+
+    // Reload on window resize
+    window.addEventListener('resize', () => {
+        if (simulation) loadGraph();
+    });
+</script>
+</body>
+</html>

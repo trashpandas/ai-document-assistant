@@ -80,8 +80,9 @@ IMPORTANT STYLE GUIDELINES:
 - Be conversational and approachable — like a helpful colleague, not a textbook.
 - Do NOT use markdown formatting (no ##, **, -, or bullet lists). Write in flowing, natural paragraphs.
 - When referencing a specific section or page of a document, include an inline link using this exact format:
-  [Section X, Page Y](ref://FILENAME/section/SECTION_NUMBER)
-  For example: [Section 14, Page 8](ref://Code of Conduct.pdf/section/14)
+  [Section X, Page Y](ref://FILENAME/page/PAGE_NUMBER)
+  For example: [Section 14, Page 8](ref://Code of Conduct.pdf/page/8)
+  IMPORTANT: The number after /page/ must be the PAGE NUMBER, not the section number.
 - Explain concepts in plain language. If the document uses legalistic phrasing, paraphrase it naturally
   and then note the official wording.
 - If someone asks about something not covered in the documents, be upfront about it.
@@ -282,6 +283,14 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/graph":
             graph_data = get_graph_data()
             self._send_json(graph_data)
+
+        elif path == "/graph-view":
+            graph_html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "graph.html")
+            try:
+                with open(graph_html_path) as f:
+                    self._send_html(f.read())
+            except FileNotFoundError:
+                self._send_json({"error": "graph.html not found"}, 404)
 
         elif path == "/metadata":
             all_meta = get_all_metadata()

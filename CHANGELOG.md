@@ -2,6 +2,33 @@
 
 All notable changes to the AI Document Assistant.
 
+## [1.0.1] - 2026-03-08
+
+### Added
+- Full-page knowledge graph visualization (graph.html) with dark theme, zoom, pan, and drag
+- Visible connection lines between nodes with hover highlighting and relationship labels
+- Color-coded legend and node info panel on graph page
+- New /graph-view endpoint serving the full-page graph
+- PDF reference links now open to the specific page cited (using #page=N)
+- "Save Conversation" button downloads entire chat as a text file
+- "New Chat" button to start a fresh conversation
+- Conversation persistence via localStorage (survives page reloads and tab switches)
+- Monochrome SVG toolbar icons with hover tooltips (macOS style)
+- Copy and Download icon buttons always visible on assistant messages
+- iOS: New Chat button and Save Conversation button in toolbar
+- iOS: Save Conversation opens native share sheet for export
+
+### Changed
+- Knowledge Graph button now opens in a new browser tab instead of side panel
+- Removed D3.js dependency from main chat page (only loaded on graph page)
+- iOS Knowledge Graph now opens as full-screen cover instead of half-sheet
+- Vector similarity index changed from IVFFlat to HNSW for better small-dataset results
+- All toolbar buttons use monochrome line icons instead of text labels
+
+### Fixed
+- Search returning incomplete results due to IVFFlat index with too few chunks
+- Conversation lost when opening Knowledge Graph or refreshing the page
+
 ## [1.0.0] - 2026-03-08
 
 ### Added
