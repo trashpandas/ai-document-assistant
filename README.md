@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/license-GPLv3-orange)
 ![PostgreSQL](https://img.shields.io/badge/postgresql-16%2B-blue)
 
-[<img src=https://github.com/trashpandas/ai-document-assistant/blob/main/assets/banner.png>]
+<img src=https://github.com/trashpandas/ai-document-assistant/blob/main/assets/banner.png>
 
 
 A conversational AI assistant that ingests Government of Alberta policy documents (PDF, TXT, MD) and answers questions about them in a warm, professional tone — with smart search, clickable references, and an interactive knowledge graph.
