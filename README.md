@@ -7,7 +7,7 @@
 
 A conversational AI assistant that ingests Government of Alberta policy documents (PDF, TXT, MD) and answers questions about them in a warm, professional tone — with smart search, clickable references, and an interactive knowledge graph.
 ## Screenshots
-![screenshot 1](https://github.com/trashpandas/ai-document-assistant/blob/main/Screenshot1.png?raw=true)
+![screenshot 1](https://github.com/trashpandas/ai-document-assistant/blob/main/Screenshot1.png)
 
 ## What It Does
 
