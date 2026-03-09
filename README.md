@@ -6,6 +6,8 @@
 ![PostgreSQL](https://img.shields.io/badge/postgresql-16%2B-blue)
 
 A conversational AI assistant that ingests Government of Alberta policy documents (PDF, TXT, MD) and answers questions about them in a warm, professional tone — with smart search, clickable references, and an interactive knowledge graph.
+## Screenshots
+assets/Screenshot1.png
 
 ## What It Does
 
